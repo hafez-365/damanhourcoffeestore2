@@ -6,10 +6,11 @@ interface Product {
   id: number;
   name_ar: string;
   description_ar: string;
-  price: number;
-  image_url: string;
+  price: string;
+  image: string;
   rating: number;
-  form_link: string;
+  googleFormUrl: string;
+  available: boolean;
 }
 
 interface ProductCardProps {
@@ -38,11 +39,28 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     return stars;
   };
 
+  if (!product.available) {
+    return null;
+  }
+
   return (
     <div className="bg-white rounded-2xl shadow-xl overflow-hidden border-2 border-amber-100 hover:border-amber-300 transform hover:scale-105 transition-all duration-300 group">
       <div className="relative">
-        <div className="w-full h-48 bg-gradient-to-br from-amber-200 to-orange-200 flex items-center justify-center">
-          <Coffee size={64} className="text-amber-700 opacity-50" />
+        <div className="w-full h-48 bg-gradient-to-br from-amber-200 to-orange-200 flex items-center justify-center overflow-hidden">
+          {product.image && product.image !== '/api/placeholder/300/200' ? (
+            <img 
+              src={product.image} 
+              alt={product.name_ar}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+          ) : null}
+          <div className={product.image && product.image !== '/api/placeholder/300/200' ? 'hidden' : ''}>
+            <Coffee size={64} className="text-amber-700 opacity-50" />
+          </div>
         </div>
         <div className="absolute top-4 right-4 bg-amber-600 text-white px-3 py-1 rounded-full text-sm font-bold">
           جديد
@@ -70,13 +88,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           </div>
           
           <div className="flex gap-2">
-            <button
-              onClick={() => window.open(product.form_link, '_blank')}
-              className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white px-4 py-2 rounded-lg font-bold shadow-lg transform hover:scale-105 transition-all duration-300 flex items-center gap-2"
-            >
-              <ExternalLink size={16} />
-              اطلب الآن
-            </button>
+            {product.googleFormUrl && (
+              <button
+                onClick={() => window.open(product.googleFormUrl, '_blank')}
+                className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white px-4 py-2 rounded-lg font-bold shadow-lg transform hover:scale-105 transition-all duration-300 flex items-center gap-2"
+              >
+                <ExternalLink size={16} />
+                اطلب الآن
+              </button>
+            )}
             
             <button
               onClick={() => window.open(`https://wa.me/201234567890?text=أريد طلب ${product.name_ar} بسعر ${product.price} جنيه`, '_blank')}
