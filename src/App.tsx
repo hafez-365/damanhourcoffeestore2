@@ -10,6 +10,7 @@ import Cart from "./pages/Cart";
 import Orders from "./pages/Orders";
 import Settings from "./pages/Settings";
 import Feedback from "./pages/Feedback";
+import Auth from "./pages/Auth";
 import Admin from "./pages/Admin";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/auth" element={<Auth />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/settings" element={<Settings />} />

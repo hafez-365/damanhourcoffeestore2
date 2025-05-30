@@ -47,7 +47,7 @@ const Products = () => {
         image: product.image || '/api/placeholder/300/200',
         rating: product.rating || 0,
         googleFormUrl: product.googleFormUrl || '',
-        available: product.available
+        available: product.available ?? true
       })) || [];
 
       setProducts(formattedProducts);

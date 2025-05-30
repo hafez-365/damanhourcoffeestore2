@@ -130,31 +130,43 @@ export type Database = {
       }
       products: {
         Row: {
+          available: boolean | null
           created_at: string
           description: string | null
+          description_ar: string | null
           googleFormUrl: string | null
           id: number
           image: string | null
           name: string | null
+          name_ar: string | null
           price: string | null
+          rating: number | null
         }
         Insert: {
+          available?: boolean | null
           created_at?: string
           description?: string | null
+          description_ar?: string | null
           googleFormUrl?: string | null
           id?: number
           image?: string | null
           name?: string | null
+          name_ar?: string | null
           price?: string | null
+          rating?: number | null
         }
         Update: {
+          available?: boolean | null
           created_at?: string
           description?: string | null
+          description_ar?: string | null
           googleFormUrl?: string | null
           id?: number
           image?: string | null
           name?: string | null
+          name_ar?: string | null
           price?: string | null
+          rating?: number | null
         }
         Relationships: []
       }
