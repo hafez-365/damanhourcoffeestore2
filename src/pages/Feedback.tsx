@@ -1,18 +1,30 @@
+import React, { useState, useRef } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { Star, MessageSquare, Send, Coffee, Loader2 } from "lucide-react";
+import Navbar from "@/components/Navbar";
+import { Helmet } from "react-helmet-async";
+import ReCAPTCHA from "react-google-recaptcha";
 
-import React, { useState } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
-import { Star, MessageSquare, Send, Coffee } from 'lucide-react';
-import Navbar from '@/components/Navbar';
+// تعريف نوع ReCAPTCHA يدويًا
+type ReCAPTCHAInstance = {
+  reset: () => void;
+  execute: () => Promise<string>;
+  getValue: () => string | null;
+};
 
 const Feedback = () => {
-  const { user } = useAuth();
+  const { user, loading: checkingSession } = useAuth();
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const { toast } = useToast();
+  
+  // استخدام النوع المخصص مع useRef
+  const recaptchaRef = useRef<ReCAPTCHAInstance | null>(null);
 
   const submitFeedback = async () => {
     if (!user) {
@@ -33,36 +45,51 @@ const Feedback = () => {
       return;
     }
 
+    if (!captchaToken) {
+      toast({
+        title: "تحقق من CAPTCHA",
+        description: "الرجاء التحقق من أنك لست روبوت",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSubmitting(true);
     try {
-      // Create feedback table entry
       const { error } = await supabase
         .from('feedback')
-        .insert({
+        .upsert({
           user_id: user.id,
           rating,
           comment: comment.trim() || null,
-          created_at: new Date().toISOString(),
         });
 
-      if (error) {
-        // If feedback table doesn't exist, we'll create a simple log for now
-        console.log('Feedback submitted:', { rating, comment, user_id: user.id });
-      }
+      if (error) throw error;
 
       toast({
         title: "شكراً لك!",
         description: "تم إرسال تقييمك بنجاح",
       });
 
-      // Reset form
       setRating(0);
       setComment('');
+      
+      // إعادة تعيين CAPTCHA
+      if (recaptchaRef.current) {
+        recaptchaRef.current.reset();
+        setCaptchaToken(null);
+      }
     } catch (error) {
       console.error('Error submitting feedback:', error);
+      
+      let description = "فشل في إرسال التقييم";
+      if (error instanceof Error) {
+        description = error.message;
+      }
+
       toast({
         title: "خطأ",
-        description: "فشل في إرسال التقييم",
+        description,
         variant: "destructive",
       });
     } finally {
@@ -80,6 +107,8 @@ const Feedback = () => {
           onMouseEnter={() => setHoverRating(starValue)}
           onMouseLeave={() => setHoverRating(0)}
           className="transition-colors"
+          disabled={submitting}
+          aria-label={`تقييم ${starValue} نجوم`}
         >
           <Star
             size={32}
@@ -94,18 +123,38 @@ const Feedback = () => {
     });
   };
 
+  if (checkingSession) {
+    return (
+      <div dir="rtl" className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-50">
+        <Helmet>
+          <title>جاري التحميل - التقييم</title>
+        </Helmet>
+        <Navbar />
+        <div className="container mx-auto px-6 py-20 text-center">
+          <Loader2 className="mx-auto mb-4 text-amber-700 animate-spin" size={48} />
+          <p className="text-xl text-amber-700">جاري التحقق من الجلسة...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div dir="rtl" className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-50">
+        <Helmet>
+          <title>تسجيل الدخول مطلوب - التقييم</title>
+        </Helmet>
         <Navbar />
         <div className="container mx-auto px-6 py-20 text-center">
           <Coffee className="mx-auto mb-4 text-amber-700" size={64} />
-          <h2 className="text-2xl font-bold text-amber-900 mb-4">
-            يجب تسجيل الدخول أولاً
-          </h2>
-          <p className="text-amber-700 mb-6">
-            سجل دخولك لتتمكن من تقييم خدماتنا
-          </p>
+          <h2 className="text-2xl font-bold text-amber-900 mb-4">يجب تسجيل الدخول أولاً</h2>
+          <p className="text-amber-700 mb-6">سجل دخولك لتتمكن من تقييم خدماتنا</p>
+          <a
+            href="/auth"
+            className="bg-amber-600 text-white px-6 py-3 rounded-lg hover:bg-amber-700 transition-colors"
+          >
+            تسجيل الدخول
+          </a>
         </div>
       </div>
     );
@@ -113,6 +162,9 @@ const Feedback = () => {
 
   return (
     <div dir="rtl" className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-50">
+      <Helmet>
+        <title>تقييم الخدمة - قهوة دمنهور</title>
+      </Helmet>
       <Navbar />
       <div className="container mx-auto px-6 py-8">
         <div className="text-center mb-8">
@@ -153,15 +205,31 @@ const Feedback = () => {
                 className="w-full px-4 py-3 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
                 rows={5}
                 placeholder="أخبرنا عن تجربتك مع قهوة دمنهور... ما الذي أعجبك؟ ما الذي يمكننا تحسينه؟"
+                disabled={submitting}
+              />
+            </div>
+            
+            <div className="mb-6 flex justify-center">
+              <ReCAPTCHA
+                ref={(ref) => {
+                  // تحويل النوع إلى النوع الذي عرفناه
+                  recaptchaRef.current = ref as ReCAPTCHAInstance | null;
+                }}
+                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                onChange={setCaptchaToken}
               />
             </div>
 
             <button
               onClick={submitFeedback}
-              disabled={submitting || rating === 0}
+              disabled={submitting || rating === 0 || !captchaToken}
               className="w-full flex items-center justify-center space-x-2 space-x-reverse bg-amber-600 text-white py-3 rounded-lg hover:bg-amber-700 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Send size={20} />
+              {submitting ? (
+                <Loader2 className="animate-spin mr-2" size={20} />
+              ) : (
+                <Send size={20} className="mr-2" />
+              )}
               <span>{submitting ? 'جاري الإرسال...' : 'إرسال التقييم'}</span>
             </button>
           </div>
@@ -178,10 +246,10 @@ const Feedback = () => {
                 <div>
                   <p className="font-medium text-amber-900">واتساب</p>
                   <button
-                    onClick={() => window.open('https://wa.me/201234567890?text=مرحباً، أريد التواصل معكم', '_blank')}
+                    onClick={() => window.open('https://wa.me/+201229204276?text=مرحباً، أريد التواصل معكم', '_blank')}
                     className="text-green-600 hover:underline"
                   >
-                    +201234567890
+                    +201229204276
                   </button>
                 </div>
               </div>
@@ -193,10 +261,10 @@ const Feedback = () => {
                 <div>
                   <p className="font-medium text-amber-900">البريد الإلكتروني</p>
                   <a
-                    href="mailto:info@damanhourcoffee.com"
+                    href="mailto:damanhourcoffee@gmail.com"
                     className="text-blue-600 hover:underline"
                   >
-                    info@damanhourcoffee.com
+                    damanhourcoffee@gmail.com
                   </a>
                 </div>
               </div>

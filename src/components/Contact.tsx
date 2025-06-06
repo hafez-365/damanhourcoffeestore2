@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { memo } from 'react';
 import { Phone, MapPin, Clock, MessageCircle } from 'lucide-react';
 
 const Contact = () => {
@@ -16,7 +15,7 @@ const Contact = () => {
             تواصل معنا
           </h2>
           <p className="text-xl text-amber-700 max-w-2xl mx-auto">
-            نحن هنا لخدمتك في أي وقت، تواصل معنا لطلب قهوتك المفضلة
+            نحن هنا لخدمتك في أي وقت (مغلق مؤقتاً) ، تواصل معنا لطلب قهوتك المفضلة
           </p>
         </div>
 
@@ -25,13 +24,13 @@ const Contact = () => {
             <h3 className="text-2xl font-bold text-amber-900 mb-6 text-center">
               معلومات التواصل
             </h3>
-            
+
             <div className="space-y-6">
               <div className="flex items-center gap-4 p-4 bg-amber-50 rounded-lg">
                 <Phone className="text-amber-600" size={24} />
                 <div>
                   <h4 className="font-bold text-amber-900">رقم الهاتف</h4>
-                  <p className="text-amber-700" dir="ltr">+20 123 456 7890</p>
+                  <p className="text-amber-700" dir="ltr">+201229204276</p>
                 </div>
               </div>
 
@@ -47,27 +46,43 @@ const Contact = () => {
                 <Clock className="text-amber-600" size={24} />
                 <div>
                   <h4 className="font-bold text-amber-900">مواعيد العمل</h4>
-                  <p className="text-amber-700">يومياً من 8 صباحاً حتى 10 مساءً</p>
+                  <p className="text-amber-700">مغلق مؤقتاً</p>
                 </div>
               </div>
             </div>
 
             <div className="mt-8 space-y-4">
               <button
-                onClick={() => window.open('https://wa.me/201234567890?text=مرحباً، أريد الاستفسار عن قهوة دمنهور', '_blank')}
+                onClick={() => window.open('https://wa.me/+201229204276?text=مرحباً، أريد الاستفسار عن قهوة دمنهور', '_blank')}
                 className="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-lg font-bold text-lg shadow-lg transform hover:scale-105 transition-all duration-300 flex items-center justify-center gap-3"
               >
                 <MessageCircle size={24} />
                 تواصل عبر واتساب
               </button>
-              
+
               <button
-                onClick={() => window.open('tel:+201234567890')}
+                onClick={() => window.open('tel:+201229204276')}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-lg font-bold text-lg shadow-lg transform hover:scale-105 transition-all duration-300 flex items-center justify-center gap-3"
               >
                 <Phone size={24} />
                 اتصل بنا الآن
               </button>
+            </div>
+
+            <div className="mt-6 text-center text-sm text-amber-700 space-x-4 rtl:space-x-reverse">
+              <a
+                href="/PrivacyAndTerms"
+                className="underline hover:text-amber-900 transition-colors duration-200"
+              >
+                سياسة الخصوصية وشروط الاستخدام
+              </a>
+              <span className="mx-2">|</span>
+              <a
+                href="/delete-data"
+                className="underline hover:text-amber-900 transition-colors duration-200"
+              >
+                حذف بيانات المستخدم
+              </a>
             </div>
           </div>
 
@@ -75,38 +90,38 @@ const Contact = () => {
             <h3 className="text-2xl font-bold mb-6 text-center">
               🌟 عروض خاصة للعملاء المميزين 🌟
             </h3>
-            
+
             <div className="space-y-6">
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
                 <h4 className="font-bold text-lg mb-2">✅ توصيل مجاني</h4>
-                <p className="text-amber-100">داخل دمنهور للطلبات أكثر من 150 جنيه</p>
+                <p className="text-amber-100">داخل دمنهور للطلبات أكثر من 2000 جنيه</p>
               </div>
 
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
                 <h4 className="font-bold text-lg mb-2">🎁 هدية مع كل طلب</h4>
-                <p className="text-amber-100">عينة مجانية من قهوة جديدة مع كل شراء</p>
+                <p className="text-amber-100">مغلق مؤقتاً</p>
               </div>
 
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
                 <h4 className="font-bold text-lg mb-2">💳 خصم للعملاء المميزين</h4>
-                <p className="text-amber-100">خصم 10% للطلبات الشهرية أكثر من 500 جنيه</p>
+                <p className="text-amber-100">مغلق مؤقتاً</p>
               </div>
 
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
                 <h4 className="font-bold text-lg mb-2">🚚 توصيل سريع</h4>
-                <p className="text-amber-100">توصيل في نفس اليوم داخل دمنهور</p>
+                <p className="text-amber-100">مغلق مؤقتاً</p>
               </div>
             </div>
 
             <div className="mt-8 text-center">
               <p className="text-lg font-bold mb-4">
-                اطلب الآن واستمتع بأفضل قهوة في دمنهور! ☕
+                مغلق مؤقتاً
               </p>
               <button
-                onClick={() => window.open('https://wa.me/201234567890?text=أريد الاستفادة من العروض الخاصة', '_blank')}
+                onClick={() => window.open('https://wa.me/+201229204276?text=أريد الاستفادة من العروض الخاصة', '_blank')}
                 className="bg-white text-amber-900 px-8 py-3 rounded-full font-bold text-lg shadow-lg hover:bg-amber-50 transform hover:scale-105 transition-all duration-300"
               >
-                اطلب عرضك الخاص الآن
+                مغلق مؤقتاً
               </button>
             </div>
           </div>
@@ -116,4 +131,4 @@ const Contact = () => {
   );
 };
 
-export default Contact;
+export default memo(Contact);

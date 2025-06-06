@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>غير متصل | قهوة دمنهور</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #fef3c7, #fed7aa);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+    }
+    
+    .container {
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 16px;
+      padding: 40px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      max-width: 600px;
+      backdrop-filter: blur(10px);
+    }
+    
+    h1 {
+      color: #92400e;
+      font-size: 2.5rem;
+      margin-bottom: 20px;
+    }
+    
+    p {
+      color: #57534e;
+      font-size: 1.2rem;
+      line-height: 1.6;
+      margin-bottom: 30px;
+    }
+    
+    .coffee-icon {
+      font-size: 5rem;
+      margin-bottom: 30px;
+      color: #78350f;
+    }
+    
+    button {
+      background: #d97706;
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      font-size: 1.1rem;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    
+    button:hover {
+      background: #b45309;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="coffee-icon">☕</div>
+    <h1>أنت غير متصل بالإنترنت</h1>
+    <p>عذراً، يبدو أن اتصالك بالإنترنت قد انقطع. يرجى التحقق من اتصالك ثم المحاولة مرة أخرى.</p>
+    <p>يمكنك الاستمرار في تصفح الأجزاء التي قمت بزيارتها سابقاً أثناء عدم الاتصال.</p>
+    <button onclick="window.location.reload()">إعادة المحاولة</button>
+  </div>
+</body>
+</html>

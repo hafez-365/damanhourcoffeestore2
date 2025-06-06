@@ -14,7 +14,7 @@ const WhatsAppButton = () => {
   ];
 
   const sendMessage = (message: string) => {
-    const whatsappUrl = `https://wa.me/201234567890?text=${encodeURIComponent(message)}`;
+    const whatsappUrl = `https://wa.me/+201229204276?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
     setIsOpen(false);
   };
@@ -25,7 +25,7 @@ const WhatsAppButton = () => {
       <div className="fixed bottom-6 left-6 z-50">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-2xl transform hover:scale-110 transition-all duration-300 animate-pulse"
+          className="bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-2xl transform hover:scale-110 transition-all duration-300"
         >
           {isOpen ? <X size={28} /> : <MessageCircle size={28} />}
         </button>
