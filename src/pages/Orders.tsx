@@ -2,12 +2,20 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Coffee, Package, Clock, CheckCircle, XCircle, ShoppingBag, ArrowLeft } from 'lucide-react';
+import { Coffee, Package, Clock, CheckCircle, XCircle, ShoppingBag, ArrowLeft, MapPin } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RefreshCw, Loader2 } from "lucide-react";
+import { Database } from '@/types/supabase';
+
+interface ShippingAddress {
+  governorate: string;
+  city: string;
+  street: string;
+  notes?: string;
+}
 
 interface Product {
   name_ar: string;
@@ -23,10 +31,11 @@ interface OrderItem {
 interface Order {
   id: string;
   total_amount: number;
-  status: string;
-  payment_status: string;
-  created_at: string;
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  payment_status: 'pending' | 'processing' | 'paid' | 'failed' | 'refunded';
+  shipping_address: ShippingAddress;
   notes: string | null;
+  created_at: string;
   order_items: OrderItem[];
 }
 
@@ -42,10 +51,11 @@ interface SupabaseOrderItem {
 interface SupabaseOrder {
   id: string;
   total_amount: number;
-  status: string;
-  payment_status: string;
-  created_at: string;
+  status: Order['status'];
+  payment_status: Order['payment_status'];
+  shipping_address: ShippingAddress;
   notes: string | null;
+  created_at: string;
   order_items: SupabaseOrderItem[] | null;
 }
 
@@ -56,14 +66,14 @@ const Orders = () => {
   const [error, setError] = useState(false);
   const { toast } = useToast();
   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
-  const [cancelling, setCancelling] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const fetchOrders = useCallback(async () => {
     if (!user) return;
     
     setLoading(true);
     setError(false);
-    
+
     try {
       const { data, error: supabaseError } = await supabase
         .from('orders')
@@ -72,8 +82,9 @@ const Orders = () => {
           total_amount,
           status,
           payment_status,
-          created_at,
+          shipping_address,
           notes,
+          created_at,
           order_items (
             quantity,
             unit_price,
@@ -88,22 +99,25 @@ const Orders = () => {
 
       if (supabaseError) throw supabaseError;
 
-      const formattedData: Order[] = (data as SupabaseOrder[]).map(order => ({
-        id: order.id,
-        total_amount: order.total_amount,
-        status: order.status,
-        payment_status: order.payment_status,
-        created_at: order.created_at,
-        notes: order.notes,
-        order_items: (order.order_items ?? []).map(item => ({
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          product: {
-            name_ar: item.product?.name_ar || "منتج غير معروف",
-            image_url: item.product?.image_url || null
-          }
-        }))
-      }));
+      const formattedData: Order[] = (data as SupabaseOrder[]).map(order => {
+        return {
+          id: order.id,
+          total_amount: order.total_amount,
+          status: order.status,
+          payment_status: order.payment_status,
+          shipping_address: order.shipping_address,
+          notes: order.notes,
+          created_at: order.created_at,
+          order_items: (order.order_items ?? []).map(item => ({
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            product: {
+              name_ar: item.product?.name_ar || "منتج غير معروف",
+              image_url: item.product?.image_url || null
+            }
+          }))
+        };
+      });
 
       setOrders(formattedData);
     } catch (err) {
@@ -125,40 +139,102 @@ const Orders = () => {
     }
   }, [user, fetchOrders]);
 
-  const cancelOrder = useCallback(async () => {
-    if (!cancelOrderId) return;
-    
-    setCancelling(true);
-    
+  const updateOrderStatus = async (orderId: string, newStatus: Order['status']) => {
+    if (!user) return false;
+
     try {
-      const { error } = await supabase
+      const { error: updateError } = await supabase
         .from('orders')
-        .update({ status: 'cancelled' })
-        .eq('id', cancelOrderId)
-        .eq('status', 'pending');
+        .update({ status: newStatus })
+        .eq('id', orderId);
 
-      if (error) throw error;
+      if (updateError) {
+        console.error('Error updating order status:', updateError);
+        toast({
+          title: "خطأ",
+          description: "حدث خطأ أثناء تحديث حالة الطلب",
+          variant: "destructive",
+        });
+        return false;
+      }
 
-      setOrders(prev => prev.map(order => 
-        order.id === cancelOrderId ? {...order, status: 'cancelled'} : order
-      ));
-      
-      toast({
-        title: "تم إلغاء الطلب",
-        description: "تم إلغاء طلبك بنجاح",
-      });
-    } catch (err) {
-      console.error('Error cancelling order:', err);
+      // تحديث القائمة مباشرة من قاعدة البيانات
+      await fetchOrders();
+      return true;
+    } catch (error) {
+      console.error('Error updating order status:', error);
       toast({
         title: "خطأ",
-        description: "فشل في إلغاء الطلب. ربما تم تجاوز وقت الإلغاء المسموح به",
+        description: "حدث خطأ أثناء تحديث حالة الطلب",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!cancelOrderId || !user) return;
+
+    setIsCancelling(true);
+    try {
+      // التحقق من حالة الطلب قبل محاولة الإلغاء
+      const { data: orderData, error: checkError } = await supabase
+        .from('orders')
+        .select('status, user_id')
+        .eq('id', cancelOrderId)
+        .single();
+
+      if (checkError) {
+        throw new Error('فشل في التحقق من حالة الطلب');
+      }
+
+      if (!orderData) {
+        throw new Error('الطلب غير موجود');
+      }
+
+      if (orderData.status !== 'pending') {
+        throw new Error('لا يمكن إلغاء هذا الطلب - الحالة الحالية: ' + getStatusText(orderData.status));
+      }
+
+      if (orderData.user_id !== user.id) {
+        throw new Error('ليس لديك صلاحية إلغاء هذا الطلب');
+      }
+
+      // تحديث حالة الطلب من pending إلى cancelled
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({ 
+          status: 'cancelled',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', cancelOrderId)
+        .eq('status', 'pending')
+        .eq('user_id', user.id);
+
+      if (updateError) {
+        console.error('Error cancelling order:', updateError);
+        throw new Error('حدث خطأ أثناء إلغاء الطلب');
+      }
+
+      toast({
+        title: "تم",
+        description: "تم إلغاء الطلب بنجاح",
+      });
+      
+      // تحديث القائمة
+      await fetchOrders();
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        title: "خطأ",
+        description: error instanceof Error ? error.message : "حدث خطأ أثناء إلغاء الطلب",
         variant: "destructive",
       });
     } finally {
+      setIsCancelling(false);
       setCancelOrderId(null);
-      setCancelling(false);
     }
-  }, [cancelOrderId, toast]);
+  };
 
   const getStatusIcon = useCallback((status: string) => {
     switch (status) {
@@ -166,7 +242,9 @@ const Orders = () => {
         return <Clock className="text-yellow-600" size={24} />;
       case 'processing':
         return <Coffee className="text-blue-600" size={24} />;
-      case 'completed':
+      case 'shipped':
+        return <Package className="text-purple-600" size={24} />;
+      case 'delivered':
         return <CheckCircle className="text-green-600" size={24} />;
       case 'cancelled':
         return <XCircle className="text-red-600" size={24} />;
@@ -181,8 +259,10 @@ const Orders = () => {
         return 'في الانتظار';
       case 'processing':
         return 'قيد التحضير';
-      case 'completed':
-        return 'مكتمل';
+      case 'shipped':
+        return 'تم الشحن';
+      case 'delivered':
+        return 'تم التوصيل';
       case 'cancelled':
         return 'ملغي';
       default:
@@ -191,11 +271,8 @@ const Orders = () => {
   }, []);
 
   const formatCurrency = useCallback((amount: number) => {
-    return new Intl.NumberFormat('ar-EG', {
-      style: 'currency',
-      currency: 'EGP',
-      minimumFractionDigits: 0
-    }).format(amount);
+    // تنسيق المبلغ بدون كسور عشرية وإزالة العلامة العشرية
+    return `${Math.round(amount)} ج.م`;
   }, []);
 
   const formatDate = useCallback((dateString: string) => {
@@ -316,7 +393,7 @@ const Orders = () => {
           <div className="max-w-4xl mx-auto space-y-6">
             {orders.map((order) => (
               <div 
-                key={order.id} 
+                key={order.id}
                 className="bg-white rounded-lg shadow-md p-6 transition-all hover:shadow-lg"
               >
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
@@ -332,16 +409,17 @@ const Orders = () => {
                     </div>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                    order.status === 'completed' ? 'bg-green-100 text-green-800' :
+                    order.status === 'delivered' ? 'bg-green-100 text-green-800' :
                     order.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                     order.status === 'processing' ? 'bg-blue-100 text-blue-800' :
+                    order.status === 'shipped' ? 'bg-purple-100 text-purple-800' :
                     'bg-yellow-100 text-yellow-800'
                   }`}>
                     {getStatusText(order.status)}
                   </span>
                 </div>
 
-                <div className="space-y-3 mb-4">
+                <div className="space-y-4">
                   {order.order_items.map((item, index) => (
                     <div 
                       key={index} 
@@ -372,7 +450,7 @@ const Orders = () => {
                         </div>
                       </div>
                       <div className="text-amber-900 font-bold">
-                        {formatCurrency(item.unit_price * item.quantity)}
+                        {formatCurrency(item.quantity * item.unit_price)}
                       </div>
                     </div>
                   ))}
@@ -384,7 +462,7 @@ const Orders = () => {
                       المجموع: {formatCurrency(order.total_amount)}
                     </span>
                     {order.payment_status === 'paid' && (
-                      <span className="ml-4 px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm">
+                      <span className="mr-4 px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm">
                         مدفوع
                       </span>
                     )}
@@ -394,6 +472,7 @@ const Orders = () => {
                     <button
                       onClick={() => setCancelOrderId(order.id)}
                       className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center"
+                      disabled={isCancelling}
                     >
                       <XCircle className="ml-1" size={18} />
                       إلغاء الطلب
@@ -409,41 +488,52 @@ const Orders = () => {
                     </p>
                   </div>
                 )}
+
+                <div className="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                  <div className="flex items-start gap-2">
+                    <MapPin className="text-amber-700 mt-1" size={18} />
+                    <div>
+                      <p className="font-bold text-amber-900 mb-1">عنوان التوصيل:</p>
+                      <p className="text-amber-800">
+                        {order.shipping_address.governorate} - {order.shipping_address.city}
+                      </p>
+                      <p className="text-amber-800">{order.shipping_address.street}</p>
+                      {order.shipping_address.notes && (
+                        <p className="text-amber-700 mt-1">
+                          ملاحظات: {order.shipping_address.notes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         )}
 
-        <Dialog open={!!cancelOrderId} onOpenChange={() => !cancelling && setCancelOrderId(null)}>
+        <Dialog open={!!cancelOrderId} onOpenChange={(open) => !open && setCancelOrderId(null)}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle className="text-amber-900">تأكيد الإلغاء</DialogTitle>
-              <DialogDescription className="py-4 text-gray-600">
-                <p className="mb-4">هل أنت متأكد من رغبتك في إلغاء هذا الطلب؟</p>
-                <p className="text-red-600 font-medium">ملاحظة: لا يمكن التراجع عن هذا الإجراء بعد التأكيد.</p>
+              <DialogTitle>تأكيد إلغاء الطلب</DialogTitle>
+              <DialogDescription>
+                هل أنت متأكد من رغبتك في إلغاء هذا الطلب؟ لا يمكن التراجع عن هذا الإجراء.
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0">
-              <Button 
-                variant="outline" 
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                variant="outline"
                 onClick={() => setCancelOrderId(null)}
-                disabled={cancelling}
+                disabled={isCancelling}
               >
                 تراجع
               </Button>
-              <Button 
-                variant="destructive" 
-                onClick={cancelOrder}
-                disabled={cancelling}
+              <Button
+                variant="destructive"
+                onClick={handleCancelOrder}
+                disabled={isCancelling}
               >
-                {cancelling ? (
-                  <>
-                    <Loader2 className="animate-spin mr-2" size={18} />
-                    جاري الإلغاء...
-                  </>
-                ) : (
-                  'نعم، ألغِ الطلب'
-                )}
+                {isCancelling && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+                تأكيد الإلغاء
               </Button>
             </DialogFooter>
           </DialogContent>

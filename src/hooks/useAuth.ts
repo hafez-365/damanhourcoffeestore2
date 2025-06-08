@@ -8,14 +8,20 @@ export interface ExtendedUser {
   id: string;
   role?: string | null;
   full_name?: string | null;
+  email?: string | null;
   phone?: string | null;
   address?: string | null;
-  city?: string | null;
-  postal_code?: string | null;
-  country?: string | null;
+  email_verified?: boolean;
+  phone_verified?: boolean;
+  avatar_url?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
-  email?: string | null; // سيتم تعبئته من الجلسة
+}
+
+interface SignUpMetadata {
+  full_name?: string;
+  phone?: string;
+  address?: string;
 }
 
 export const useAuth = () => {
@@ -25,119 +31,116 @@ export const useAuth = () => {
   const { toast } = useToast();
   
   const fetchUserProfile = useCallback(async (userId: string): Promise<ExtendedUser | null> => {
-    console.log("useAuth: fetchUserProfile CALLED for userId:", userId);
     try {
-      const { data, error, status } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
-      if (error && status !== 406) {
-        console.error("useAuth: fetchUserProfile Supabase error (non-406):", error);
-        return null;
-      }
-      if (!data && status === 406) {
-        console.log("useAuth: fetchUserProfile - No profile found (status 406).");
-        return null;
-      }
-      if (!data && !error) {
-        console.warn("useAuth: fetchUserProfile - No data and no error.");
+      if (error) {
+        console.error("Error fetching user profile:", error);
         return null;
       }
       
-      console.log("useAuth: fetchUserProfile successful. Profile data:", data);
+      if (!data) {
+        console.warn("No profile found for user:", userId);
+        return null;
+      }
+
       return {
         id: data.id,
         role: data.role || null,
         full_name: data.full_name || null,
+        email: data.email || null,
         phone: data.phone || null,
         address: data.address || null,
-        city: data.city || null,
-        postal_code: data.postal_code || null,
-        country: data.country || null,
+        email_verified: data.email_verified || false,
+        phone_verified: data.phone_verified || false,
+        avatar_url: data.avatar_url || null,
         created_at: data.created_at || null,
         updated_at: data.updated_at || null,
-        // لا نعيد email لأنه غير موجود في الجدول
       };
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        console.error("useAuth: CATCH in fetchUserProfile:", err.message);
-      } else {
-        console.error("useAuth: CATCH in fetchUserProfile: Unknown error", err);
-      }
+    } catch (err) {
+      console.error("Error in fetchUserProfile:", err);
       return null;
     }
   }, []);
 
   const updateUserSessionAndProfile = useCallback(async (currentSession: Session | null) => {
-    console.log("useAuth: updateUserSessionAndProfile CALLED. Session:", currentSession);
+    try {
+      if (!currentSession?.user) {
+        setUser(null);
+        setSession(null);
+        setLoading(false);
+        return;
+      }
 
-    if (currentSession?.user) {
-      const profile = await fetchUserProfile(currentSession.user.id);
+      // تحديث الجلسة فوراً
+      setSession(currentSession);
 
-      const newUser: ExtendedUser = {
-        ...profile,
+      // إنشاء كائن المستخدم الأولي من بيانات الجلسة
+      const initialUser: ExtendedUser = {
         id: currentSession.user.id,
-        email: currentSession.user.email || null, // أخذ البريد الإلكتروني من الجلسة
+        email: currentSession.user.email || null,
       };
+      setUser(initialUser);
+      
+      // تحديث حالة التحميل بعد تعيين البيانات الأولية
+      setLoading(false);
 
-      setUser((prevUser) => {
-        if (prevUser?.id === newUser.id && 
-            prevUser.role === newUser.role &&
-            prevUser.full_name === newUser.full_name &&
-            prevUser.phone === newUser.phone) {
-          return prevUser;
-        }
-        return newUser;
-      });
-
-      setSession((prevSession) => {
-        if (
-          prevSession?.access_token === currentSession.access_token &&
-          prevSession?.user?.id === currentSession.user.id
-        ) {
-          return prevSession;
-        }
-        return currentSession;
-      });
-    } else {
-      setUser(null);
-      setSession(null);
-      console.log("useAuth: No user in session, user set to null.");
+      // جلب البيانات الإضافية من الملف الشخصي
+      const profile = await fetchUserProfile(currentSession.user.id);
+      
+      if (profile) {
+        setUser(prev => ({
+          ...prev,
+          ...profile,
+        }));
+      }
+    } catch (err) {
+      console.error("Error in updateUserSessionAndProfile:", err);
+      setLoading(false);
     }
-
-    setLoading(false);
-    console.log("useAuth: setLoading(false) in updateUserSessionAndProfile.");
   }, [fetchUserProfile]);
 
   useEffect(() => {
-    console.log("useAuth: Main useEffect RUNNING to set up listener.");
-    setLoading(true);
+    let mounted = true;
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, sessionFromListener) => {
-        console.log(`useAuth: onAuthStateChange TRIGGERED. Event: ${event}`, sessionFromListener);
+    // تحقق من الجلسة الحالية عند تحميل التطبيق
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      if (mounted) {
+        updateUserSessionAndProfile(initialSession);
+      }
+    }).catch(error => {
+      console.error("Error in initial getSession:", error);
+      if (mounted) {
+        setLoading(false);
+      }
+    });
+
+    // إعداد مستمع لتغييرات حالة المصادقة
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, sessionFromListener) => {
+      if (!mounted) return;
+
+      if (event === 'SIGNED_IN') {
+        updateUserSessionAndProfile(sessionFromListener);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setSession(null);
+        setLoading(false);
+      } else {
         updateUserSessionAndProfile(sessionFromListener);
       }
-    );
-
-    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
-      console.log("useAuth: Initial getSession() in useEffect resolved. Session:", initialSession);
-      updateUserSessionAndProfile(initialSession);
-    }).catch(error => {
-      console.error("useAuth: Error in initial getSession() promise:", error);
-      updateUserSessionAndProfile(null);
     });
 
     return () => {
-      console.log("useAuth: Unsubscribing from onAuthStateChange.");
+      mounted = false;
       authListener?.subscription?.unsubscribe();
     };
   }, [updateUserSessionAndProfile]);
 
   const signInWithOAuth = async (provider: 'google' | 'facebook') => {
-    console.log(`useAuth: signInWith${provider} CALLED`);
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
@@ -155,13 +158,76 @@ export const useAuth = () => {
         throw error;
       }
       return data;
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        console.error(`useAuth: CATCH in signInWith${provider}:`, err.message);
-      } else {
-        console.error(`useAuth: CATCH in signInWith${provider}: Unknown error`, err);
-      }
+    } catch (err) {
+      console.error(`Error in signInWith${provider}:`, err);
       throw err;
+    }
+  };
+
+  const signIn = async (email: string, password: string) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      return data;
+    } catch (error) {
+      console.error('Error in signIn:', error);
+      throw error;
+    }
+  };
+
+  const signUp = async (email: string, password: string, metadata?: SignUpMetadata) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: metadata,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.user) {
+        // إنشاء الملف الشخصي
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            email: email,
+            full_name: metadata?.full_name,
+            phone: metadata?.phone,
+            role: 'customer',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+
+        if (profileError) {
+          console.error('Error creating profile:', profileError);
+          // حذف المستخدم إذا فشل إنشاء الملف الشخصي
+          await supabase.auth.admin.deleteUser(data.user.id);
+          throw profileError;
+        }
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error in signUp:', error);
+      throw error;
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error in signOut:', error);
+      throw error;
     }
   };
 
@@ -186,176 +252,32 @@ export const useAuth = () => {
         .update({
           full_name: updates.full_name,
           phone: updates.phone,
-          address: updates.address,
-          city: updates.city,
-          postal_code: updates.postal_code,
+          role: updates.role,
+          avatar_url: updates.avatar_url,
+          updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
 
       if (profileError) throw profileError;
 
       // تحديث حالة المستخدم المحلية
-      const newUser: ExtendedUser = {
-        ...user,
-        ...updates
-      };
-      setUser(newUser);
+      setUser(prev => prev ? { ...prev, ...updates } : null);
 
-      return updatedAuthData.user;
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        console.error("useAuth: CATCH in updateUserProfile:", err.message);
-        toast({
-          title: "خطأ في تحديث الملف الشخصي",
-          description: err.message,
-          variant: "destructive"
-        });
-        throw err;
-      } else {
-        console.error("useAuth: CATCH in updateUserProfile: Unknown error", err);
-        toast({
-          title: "خطأ في تحديث الملف الشخصي",
-          description: "حدث خطأ غير معروف",
-          variant: "destructive"
-        });
-        throw new Error("Unknown error");
-      }
+      return updatedAuthData;
+    } catch (error) {
+      console.error('Error updating user profile:', error);
+      throw error;
     }
   };
-
-  const signIn = async (email: string, password: string) => {
-    console.log("useAuth: signIn CALLED with email:", email);
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      console.log("useAuth: signIn - AFTER supabase.auth.signInWithPassword. Result data:", data, "Error:", error);
-
-      if (error) {
-        if (error.status === 400 && error.message === "Invalid login credentials") {
-          toast({
-            title: "بيانات الدخول غير صحيحة",
-            description: "البريد الإلكتروني أو كلمة المرور غير صحيحة",
-            variant: "destructive"
-          });
-        } else {
-          toast({
-            title: "خطأ في تسجيل الدخول",
-            description: error.message,
-            variant: "destructive"
-          });
-        }
-        throw error;
-      }
-      return data;
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        console.error("useAuth: CATCH in signIn function:", err.message);
-      } else {
-        console.error("useAuth: CATCH in signIn function: Unknown error", err);
-      }
-      throw err;
-    }
-  };
-
-  const signUp = async (email: string, password: string, metadata?: Record<string, unknown>) => {
-    console.log("useAuth: signUp CALLED with email:", email);
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: metadata,
-          emailRedirectTo: 'https://damanhourcoffee.netlify.app/auth/callback'
-        },
-      });
-
-      console.log("useAuth: signUp - Result data:", data, "Error:", error);
-
-      if (error) {
-        toast({
-          title: "خطأ في إنشاء الحساب",
-          description: error.message,
-          variant: "destructive"
-        });
-        throw error;
-      }
-
-      if (data.user && !data.session) {
-        toast({
-          title: "تم إنشاء الحساب بنجاح",
-          description: "يرجى التحقق من بريدك الإلكتروني لتأكيد حسابك.",
-          variant: "default"
-        });
-      }
-
-      return data;
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        console.error("useAuth: CATCH in signUp function:", err.message);
-        toast({
-          title: "خطأ في إنشاء الحساب",
-          description: err.message,
-          variant: "destructive"
-        });
-      } else {
-        console.error("useAuth: CATCH in signUp function: Unknown error", err);
-        toast({
-          title: "خطأ في إنشاء الحساب",
-          description: "حدث خطأ غير معروف",
-          variant: "destructive"
-        });
-      }
-      throw err;
-    }
-  };
-
-  const signOut = async () => {
-    console.log("useAuth: signOut CALLED");
-    try {
-      const { error } = await supabase.auth.signOut();
-      console.log("useAuth: signOut - Error:", error);
-
-      if (error) {
-        toast({
-          title: "خطأ في تسجيل الخروج",
-          description: error.message,
-          variant: "destructive"
-        });
-        throw error;
-      }
-
-      setUser(null);
-      setSession(null);
-      console.log("useAuth: signOut successful");
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        console.error("useAuth: CATCH in signOut function:", err.message);
-        toast({
-          title: "خطأ في تسجيل الخروج",
-          description: err.message,
-          variant: "destructive"
-        });
-      } else {
-        console.error("useAuth: CATCH in signOut function: Unknown error", err);
-        toast({
-          title: "خطأ في تسجيل الخروج",
-          description: "حدث خطأ غير معروف",
-          variant: "destructive"
-        });
-      }
-      throw err;
-    }
-  };
-
-  console.log("useAuth: HOOK RENDER/RE-RENDER. User:", user, "Session:", session, "Loading:", loading);
 
   return {
     user,
     session,
     loading,
     signIn,
-    signInWithOAuth,
     signUp,
     signOut,
-    updateUserProfile
+    signInWithOAuth,
+    updateUserProfile,
   };
 };

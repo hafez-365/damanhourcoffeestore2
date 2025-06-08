@@ -1,6 +1,7 @@
-import React from 'react';
-import { Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
   children: React.ReactElement;  // عنصر React واحد
@@ -9,22 +10,38 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
+
+  // إضافة مؤقت للتحميل
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (loading) {
+        console.warn('Auth loading state taking longer than expected');
+      }
+    }, 5000); // 5 ثواني
+
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   if (loading) {
-    return <div>...جاري التحقق من الدخول</div>;
+    return (
+      <div className="min-h-screen flex justify-center items-center bg-gradient-to-b from-amber-50 to-orange-50">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-amber-600 mx-auto" />
+          <p className="mt-4 text-amber-900">جاري التحقق من الدخول...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!user) {
-    // إذا لم يكن المستخدم مسجلاً الدخول، يوجه إلى صفحة تسجيل الدخول
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
   if (requiredRole && user.role !== requiredRole) {
-    // إذا دور المستخدم لا يطابق المطلوب، يعيد التوجيه للصفحة الرئيسية
     return <Navigate to="/" replace />;
   }
 
-  // السماح بالوصول إذا تحقق الشرطان أعلاه
   return children;
 };
 

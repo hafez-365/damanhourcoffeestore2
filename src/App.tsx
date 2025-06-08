@@ -1,46 +1,35 @@
-import React, { Suspense, lazy, useMemo, useEffect } from "react";
-import { useAdmin } from "@/hooks/useAdmin";
-import { AdminProvider } from "@/context/AdminContext";
+import React, { Suspense, lazy } from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import ProtectedRoute from "@/components/ProtectedRoute";
 import { CartProvider } from './context/CartProvider';
 import { HelmetProvider } from 'react-helmet-async';
-import { Loader2 } from 'lucide-react';
-import { registerServiceWorker } from '@/lib/serviceWorker';
-
-// Define loading components directly in the file
-const LoadingSpinner = ({ message }: { message?: string }) => (
-  <div className="flex flex-col items-center justify-center h-screen">
-    <Loader2 className="h-12 w-12 animate-spin" />
-    {message && <p className="mt-4 text-lg">{message}</p>}
-  </div>
-);
-
-const RouteLoading = () => (
-  <div className="flex justify-center items-center h-64">
-    <Loader2 className="h-8 w-8 animate-spin" />
-  </div>
-);
-
-const PrefetchPages = () => null;
+import { AdminProvider } from "@/context/AdminContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import RouteLoading from '@/components/RouteLoading';
 
 // Lazy-loaded page components
-const Index = lazy(() => import('./pages/Index'));
-const NotFound = lazy(() => import('./pages/NotFound'));
-const Cart = lazy(() => import('./pages/Cart'));
-const Orders = lazy(() => import('./pages/Orders'));
-const Settings = lazy(() => import('./pages/Settings'));
-const Feedback = lazy(() => import('./pages/Feedback'));
-const Auth = lazy(() => import('./pages/Auth'));
-const PrivacyAndTerms = lazy(() => import('./pages/PrivacyAndTerms'));
-const DeleteData = lazy(() => import('./pages/DeleteData'));
-const Admin = lazy(() => import('./pages/Admin'));
+const Index = lazy(() => import('@/pages/Index'));
+const Auth = lazy(() => import('@/pages/Auth'));
+const AuthCallback = lazy(() => import('@/pages/auth/callback'));
+const Cart = lazy(() => import('@/pages/Cart'));
+const Orders = lazy(() => import('@/pages/Orders'));
+const OrderDetails = lazy(() => import('@/pages/OrderDetails'));
+const Settings = lazy(() => import('@/pages/Settings'));
+const Feedback = lazy(() => import('@/pages/Feedback'));
+const Profile = lazy(() => import('@/pages/Profile'));
+const PrivacyAndTerms = lazy(() => import('@/pages/PrivacyAndTerms'));
+const DeleteData = lazy(() => import('@/pages/DeleteData'));
+const Admin = lazy(() => import('@/pages/Admin'));
+const Products = lazy(() => import('@/pages/Products'));
+const About = lazy(() => import('@/pages/About'));
+const Contact = lazy(() => import('@/pages/Contact'));
+const Favorites = lazy(() => import('@/pages/Favorites'));
+const NotFound = lazy(() => import('@/pages/NotFound'));
 
-const createQueryClient = () => new QueryClient({
+const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000,
@@ -51,50 +40,7 @@ const createQueryClient = () => new QueryClient({
   },
 });
 
-const AppRoutes = () => {
-  const { loading } = useAdmin();
-
-  if (loading) {
-    return <LoadingSpinner message="جاري التحقق من صلاحيات الدخول..." />;
-  }
-
-  return (
-    <>
-      <PrefetchPages />
-      <Routes>
-        <Route path="/" element={<Suspense fallback={<RouteLoading />}><Index /></Suspense>} />
-        <Route path="/auth" element={<Suspense fallback={<RouteLoading />}><Auth /></Suspense>} />
-        <Route path="/cart" element={<Suspense fallback={<RouteLoading />}><Cart /></Suspense>} />
-        <Route path="/orders" element={<Suspense fallback={<RouteLoading />}><Orders /></Suspense>} />
-        <Route path="/settings" element={<Suspense fallback={<RouteLoading />}><Settings /></Suspense>} />
-        <Route path="/feedback" element={<Suspense fallback={<RouteLoading />}><Feedback /></Suspense>} />
-        <Route path="/PrivacyAndTerms" element={<Suspense fallback={<RouteLoading />}><PrivacyAndTerms /></Suspense>} />
-        <Route path="/delete-data" element={<Suspense fallback={<RouteLoading />}><DeleteData /></Suspense>} />
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute requiredRole="admin">
-              <Suspense fallback={<LoadingSpinner message="جاري تحميل لوحة التحكم..." />}>
-                <Admin />
-              </Suspense>
-            </ProtectedRoute>
-          }
-        />
-        <Route path="*" element={<Suspense fallback={<RouteLoading />}><NotFound /></Suspense>} />
-      </Routes>
-    </>
-  );
-};
-
 const App = () => {
-  const queryClient = useMemo(() => createQueryClient(), []);
-  
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      registerServiceWorker();
-    }
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <HelmetProvider>
@@ -104,7 +50,83 @@ const App = () => {
               <Toaster />
               <Sonner position="top-center" richColors />
               <BrowserRouter>
-                <AppRoutes />
+                <Suspense fallback={<RouteLoading />}>
+                  <Routes>
+                    <Route path="/" element={<Index />} />
+                    <Route path="/auth" element={<Auth />} />
+                    <Route path="/auth/callback" element={<AuthCallback />} />
+                    <Route
+                      path="/cart"
+                      element={
+                        <ProtectedRoute>
+                          <Cart />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/orders"
+                      element={
+                        <ProtectedRoute>
+                          <Orders />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/orders/:id"
+                      element={
+                        <ProtectedRoute>
+                          <OrderDetails />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/settings"
+                      element={
+                        <ProtectedRoute>
+                          <Settings />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/feedback"
+                      element={
+                        <ProtectedRoute>
+                          <Feedback />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/profile"
+                      element={
+                        <ProtectedRoute>
+                          <Profile />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route path="/privacy-and-terms" element={<PrivacyAndTerms />} />
+                    <Route path="/delete-data" element={<DeleteData />} />
+                    <Route
+                      path="/admin"
+                      element={
+                        <ProtectedRoute requiredRole="admin">
+                          <Admin />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route path="/products" element={<Products />} />
+                    <Route path="/about" element={<About />} />
+                    <Route path="/contact" element={<Contact />} />
+                    <Route
+                      path="/favorites"
+                      element={
+                        <ProtectedRoute>
+                          <Favorites />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </Suspense>
               </BrowserRouter>
             </CartProvider>
           </AdminProvider>
@@ -114,4 +136,4 @@ const App = () => {
   );
 };
 
-export default React.memo(App);
+export default App;

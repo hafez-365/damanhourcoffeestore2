@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Coffee, Mail, Lock, User, Phone, MapPin, Loader2, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Helmet } from "react-helmet-async";
@@ -19,6 +19,7 @@ type FormData = {
 const Auth = () => {
   const { user, signIn, signUp } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   
   const shouldRedirect = useRef(true);
@@ -36,12 +37,16 @@ const Auth = () => {
   const [isBlocked, setIsBlocked] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // استخراج الصفحة المقصودة من state أو query params
+  const from = location.state?.from?.pathname || location.search?.split('from=')[1] || '/';
+
   useEffect(() => {
     if (user && shouldRedirect.current) {
-      navigate("/", { replace: true });
+      // التوجيه إلى الصفحة المقصودة بعد تسجيل الدخول
+      navigate(from, { replace: true });
       shouldRedirect.current = false;
     }
-  }, [user, navigate]);
+  }, [user, navigate, from]);
 
   useEffect(() => {
     if (loginAttempts >= 5) {
@@ -59,6 +64,35 @@ const Auth = () => {
     
     if (isBlocked) return;
 
+    if (!isLogin) {
+      if (!formData.full_name || formData.full_name.length < 3) {
+        toast({
+          title: "خطأ في البيانات",
+          description: "الرجاء إدخال اسم صحيح (3 أحرف على الأقل)",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (!formData.phone || !/^01[0125][0-9]{8}$/.test(formData.phone)) {
+        toast({
+          title: "خطأ في البيانات",
+          description: "الرجاء إدخال رقم هاتف مصري صحيح يبدأ بـ 01",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (!formData.address || formData.address.length < 10) {
+        toast({
+          title: "خطأ في البيانات",
+          description: "الرجاء إدخال عنوان تفصيلي (10 أحرف على الأقل)",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
+
     setLoading(true);
     shouldRedirect.current = true;
 
@@ -67,15 +101,19 @@ const Auth = () => {
         await signIn(formData.email, formData.password);
         toast({ title: "مرحباً بك!", description: "تم تسجيل الدخول بنجاح" });
       } else {
+        const metadata = {
+          full_name: formData.full_name,
+          phone: formData.phone,
+          address: formData.address,
+          role: 'customer'
+        };
+
         await signUp(
           formData.email,
           formData.password,
-          {
-            full_name: formData.full_name,
-            phone: formData.phone,
-            address: formData.address,
-          }
+          metadata
         );
+        
         toast({
           title: "تم إنشاء الحساب!",
           description: "يرجى مراجعة بريدك الإلكتروني لتأكيد الحساب",
@@ -172,23 +210,46 @@ const Auth = () => {
                 />
               </>
             )}
-            
-            <SubmitButton 
-              isLogin={isLogin} 
-              loading={loading} 
-              disabled={
-                loading || 
-                isBlocked
-              } 
-            />
+
+            <button
+              type="submit"
+              disabled={loading || isBlocked}
+              className={`
+                w-full py-3 px-4 rounded-lg text-white font-semibold
+                ${loading || isBlocked
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-amber-600 hover:bg-amber-700 transition-colors'
+                }
+              `}
+            >
+              {loading ? (
+                <div className="flex items-center justify-center">
+                  <Loader2 className="animate-spin ml-2" size={20} />
+                  <span>جاري {isLogin ? 'تسجيل الدخول' : 'إنشاء الحساب'}...</span>
+                </div>
+              ) : (
+                isLogin ? 'تسجيل الدخول' : 'إنشاء حساب'
+              )}
+            </button>
+
+            {isBlocked && (
+              <p className="text-red-600 text-center">
+                تم تجاوز عدد المحاولات المسموح بها. يرجى المحاولة بعد 30 دقيقة.
+              </p>
+            )}
           </form>
-          
-          <ToggleFormLink 
-            isLogin={isLogin} 
-            onClick={toggleFormType} 
-          />
-          
-          <TermsAndConditions />
+
+          <div className="mt-6 text-center">
+            <button
+              onClick={toggleFormType}
+              className="text-amber-700 hover:text-amber-800 transition-colors"
+            >
+              {isLogin
+                ? 'ليس لديك حساب؟ سجل الآن'
+                : 'لديك حساب بالفعل؟ سجل دخولك'
+              }
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -272,7 +333,7 @@ const FullNameField = memo(({ value, onChange, disabled }: {
       required
       disabled={disabled}
       className="w-full px-4 py-3 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
-      placeholder="أدخل اسمك الكامل"
+      placeholder="محمد أحمد"
     />
   </div>
 ));
@@ -293,18 +354,17 @@ const PhoneField = memo(({ value, onChange, disabled }: {
       value={value}
       onChange={onChange}
       required
-      pattern="^01[0-9]{9}$"
-      title="يجب أن يكون رقم الهاتف مكون من 11 رقم ويبدأ بـ 01"
       disabled={disabled}
       className="w-full px-4 py-3 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
-      placeholder="01XXXXXXXXX"
+      placeholder="01xxxxxxxxx"
+      pattern="^01[0125][0-9]{8}$"
     />
   </div>
 ));
 
 const AddressField = memo(({ value, onChange, disabled }: { 
   value: string; 
-  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void; 
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; 
   disabled: boolean 
 }) => (
   <div>
@@ -312,59 +372,17 @@ const AddressField = memo(({ value, onChange, disabled }: {
       <MapPin size={20} />
       <span>العنوان</span>
     </label>
-    <textarea
+    <input
+      type="text"
       name="address"
       value={value}
       onChange={onChange}
       required
       disabled={disabled}
-      className="w-full px-4 py-3 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none disabled:opacity-50"
-      rows={3}
-      placeholder="أدخل عنوانك التفصيلي"
+      className="w-full px-4 py-3 border border-amber-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
+      placeholder="شارع الجمهورية، دمنهور"
     />
   </div>
 ));
 
-const SubmitButton = memo(({ isLogin, loading, disabled }: { 
-  isLogin: boolean; 
-  loading: boolean; 
-  disabled: boolean 
-}) => (
-  <button
-    type="submit"
-    disabled={disabled}
-    className="w-full bg-amber-600 text-white py-3 rounded-lg hover:bg-amber-700 transition-colors font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center"
-  >
-    {loading ? (
-      <Loader2 className="animate-spin mr-2" size={24} />
-    ) : isLogin ? (
-      'تسجيل الدخول'
-    ) : (
-      'إنشاء حساب'
-    )}
-  </button>
-));
-
-const ToggleFormLink = memo(({ isLogin, onClick }: { 
-  isLogin: boolean; 
-  onClick: () => void 
-}) => (
-  <div className="mt-6 text-center">
-    <button
-      onClick={onClick}
-      className="text-amber-600 hover:text-amber-800 font-medium"
-    >
-      {isLogin
-        ? 'ليس لديك حساب؟ إنشاء حساب جديد'
-        : 'لديك حساب بالفعل؟ تسجيل الدخول'}
-    </button>
-  </div>
-));
-
-const TermsAndConditions = memo(() => (
-  <div className="mt-6 pt-6 border-t border-amber-100 text-center text-sm text-amber-700">
-    باستخدام هذا التطبيق، أنت توافق على شروط الخدمة وسياسة الخصوصية
-  </div>
-));
-
-export default memo(Auth);
+export default Auth;

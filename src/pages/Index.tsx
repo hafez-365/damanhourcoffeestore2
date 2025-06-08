@@ -240,17 +240,23 @@ const Index = () => {
           <LazyHero />
         </Suspense>
         
-        <Suspense fallback={<SkeletonLoader height={800} />}>
-          <LazyProducts />
-        </Suspense>
+        <section id="products">
+          <Suspense fallback={<SkeletonLoader height={800} />}>
+            <LazyProducts />
+          </Suspense>
+        </section>
         
-        <Suspense fallback={<SkeletonLoader height={500} />}>
-          <LazyAbout />
-        </Suspense>
+        <section id="about">
+          <Suspense fallback={<SkeletonLoader height={500} />}>
+            <LazyAbout />
+          </Suspense>
+        </section>
         
-        <Suspense fallback={<SkeletonLoader height={700} />}>
-          <LazyContact />
-        </Suspense>
+        <section id="contact">
+          <Suspense fallback={<SkeletonLoader height={700} />}>
+            <LazyContact />
+          </Suspense>
+        </section>
       </main>
       
       <WhatsAppButton />

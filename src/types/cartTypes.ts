@@ -1,7 +1,7 @@
 // src/types/cartTypes.ts
 
 export type CartItem = {
-  id: number;
+  id: string;
   name_ar: string;
   price: number;
   image_url: string;
@@ -9,7 +9,7 @@ export type CartItem = {
 };
 
 export type CartProduct = {
-  id: number;
+  id: string;
   name_ar: string;
   price: number;
   image_url: string;
@@ -19,8 +19,8 @@ export type CartProduct = {
 export type CartContextType = {
   cart: CartItem[];
   addToCart: (product: CartProduct) => void;
-  removeFromCart: (id: number) => void;
-  updateQuantity: (id: number, quantity: number) => void;
+  removeFromCart: (id: string) => void;
+  updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
   totalPrice: number;
   loading: boolean;

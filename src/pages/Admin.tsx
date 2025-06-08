@@ -10,24 +10,24 @@ import { checkUserAdminStatus } from '@/lib/authUtils';
 
 // تعريف نوع المنتج
 export interface Product {
-  id?: number;
+  id?: string;
+  name: string;
   name_ar: string;
   description_ar: string;
   price: number;
   image_url: string;
   rating: number;
-  googleFormUrl: string;
   available: boolean;
 }
 
 // المنتج الافتراضي
 const defaultProduct: Product = {
+  name: '',
   name_ar: '',
   description_ar: '',
   price: 0,
   image_url: '',
   rating: 5,
-  googleFormUrl: '',
   available: true,
 };
 
@@ -39,7 +39,7 @@ const Admin = () => {
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [deleteProductId, setDeleteProductId] = useState<number | null>(null);
+  const [deleteProductId, setDeleteProductId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
@@ -110,12 +110,12 @@ const Admin = () => {
     setIsSaving(true);
     try {
       const payload = { 
+        name: product.name_ar,
         name_ar: product.name_ar.trim(),
         description_ar: product.description_ar.trim(),
         price: product.price,
         image_url: product.image_url.trim(),
         rating: product.rating,
-        googleFormUrl: product.googleFormUrl.trim(),
         available: product.available
       };
 
@@ -153,12 +153,11 @@ const Admin = () => {
       });
       setEditingProduct(null);
       setIsAddingNew(false);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'فشل في حفظ المنتج';
-      console.error(err);
+    } catch (error) {
+      console.error('Error saving product:', error);
       toast({ 
-        title: 'خطأ', 
-        description: message, 
+        title: 'خطأ في الحفظ', 
+        description: error instanceof Error ? error.message : 'حدث خطأ أثناء حفظ المنتج', 
         variant: 'destructive' 
       });
     } finally {
@@ -167,7 +166,7 @@ const Admin = () => {
   }, [user, isAdmin, toast]);
 
   // حذف المنتج
-  const handleDelete = useCallback(async (id: number) => {
+  const handleDelete = useCallback(async (id: string) => {
     if (!user || !isAdmin) {
       toast({ 
         title: 'خطأ', 
@@ -431,17 +430,6 @@ const ProductForm: React.FC<ProductFormProps> = React.memo(({
           placeholder="https://example.com/image.jpg"
           className="w-full px-4 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
           required
-        />
-      </div>
-      
-      <div className="md:col-span-2 space-y-1">
-        <label className="block font-medium text-amber-800">رابط نموذج جوجل</label>
-        <input
-          type="url"
-          value={product?.googleFormUrl || ''}
-          onChange={(e) => onFieldChange('googleFormUrl', e.target.value)}
-          placeholder="https://docs.google.com/forms/..."
-          className="w-full px-4 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
         />
       </div>
       

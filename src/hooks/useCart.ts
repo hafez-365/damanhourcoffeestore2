@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 const CART_STORAGE_KEY = "damanhour_cart";
 
 export interface CartItem {
-  id: number; // product id
+  id: string;  // product id
   name_ar: string;
   description_ar: string;
   price: number;
@@ -29,16 +29,15 @@ const useCart = () => {
   useEffect(() => {
     const loadCart = async () => {
       setLoading(true);
-
-      // داخل useEffect الذي يحمل السلة من Supabase
       try {
         if (user) {
           const { data, error } = await supabase
             .from("cart_items")
-            .select(
-              `
+            .select(`
               id,
               quantity,
+              unit_price,
+              product_id,
               products (
                 id,
                 name_ar,
@@ -46,29 +45,30 @@ const useCart = () => {
                 price,
                 image_url
               )
-            `
-            )
+            `)
             .eq("user_id", user.id);
 
           if (error) throw error;
 
           const cartItems = data
             .map((item) => {
-              // تحقق هل products مصفوفة ام كائن مفرد
               const product = Array.isArray(item.products)
                 ? item.products[0]
                 : item.products;
+              
+              if (!product) return null;
+
               return {
-                id: product?.id,
+                id: product.id,
                 cartItemId: item.id,
-                name_ar: product?.name_ar,
-                description_ar: product?.description_ar,
-                price: product?.price,
-                image_url: product?.image_url || "",
+                name_ar: product.name_ar,
+                description_ar: product.description_ar,
+                price: item.unit_price || product.price,
+                image_url: product.image_url || "",
                 quantity: item.quantity,
               };
             })
-            .filter((item) => item.id !== undefined) as CartItem[];
+            .filter((item): item is CartItem => item !== null);
 
           setCart(cartItems);
         } else {
@@ -77,7 +77,11 @@ const useCart = () => {
         }
       } catch (error) {
         console.error("Failed to load cart:", error);
-        toast.error("فشل في تحميل سلة المشتريات");
+        toast({
+          title: "خطأ",
+          description: "فشل في تحميل سلة المشتريات",
+          variant: "destructive"
+        });
       } finally {
         setLoading(false);
       }
@@ -112,21 +116,13 @@ const useCart = () => {
         // Guest mode - localStorage only
         setCart((prevCart) => {
           const existingItem = prevCart.find((item) => item.id === product.id);
-          const updatedCart = existingItem
+          return existingItem
             ? prevCart.map((item) =>
                 item.id === product.id
                   ? { ...item, quantity: item.quantity + quantity }
                   : item
               )
             : [...prevCart, { ...product, quantity }];
-
-          return updatedCart;
-        });
-
-        setToastState({
-          show: true,
-          message: `تم إضافة ${product.name_ar} إلى السلة`,
-          type: "success",
         });
         return;
       }
@@ -136,38 +132,57 @@ const useCart = () => {
         setLoading(true);
 
         // Check if product already exists in cart
-        const existingItem = cart.find((item) => item.id === product.id);
+        const { data: existingItem, error: checkError } = await supabase
+          .from("cart_items")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("product_id", product.id)
+          .single();
+
+        if (checkError && checkError.code !== "PGRST116") throw checkError;
 
         if (existingItem) {
           // Update quantity in Supabase
-          const { error } = await supabase
-            .from("cart_items")
-            .update({ quantity: existingItem.quantity + quantity })
-            .eq("id", existingItem.cartItemId);
+          const newQuantity = existingItem.quantity + quantity;
+          const newTotalPrice = product.price * newQuantity;
 
-          if (error) throw error;
+          const { error: updateError } = await supabase
+            .from("cart_items")
+            .update({
+              quantity: newQuantity,
+              unit_price: product.price,
+              total_price: newTotalPrice,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", existingItem.id);
+
+          if (updateError) throw updateError;
 
           // Update local state
           setCart((prev) =>
             prev.map((item) =>
               item.id === product.id
-                ? { ...item, quantity: item.quantity + quantity }
+                ? { ...item, quantity: newQuantity }
                 : item
             )
           );
         } else {
           // Insert new item to Supabase
-          const { data, error } = await supabase
+          const { data: newItem, error: insertError } = await supabase
             .from("cart_items")
             .insert({
               user_id: user.id,
               product_id: product.id,
-              quantity,
+              quantity: quantity,
+              unit_price: product.price,
+              total_price: product.price * quantity,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
             })
             .select()
             .single();
 
-          if (error) throw error;
+          if (insertError) throw insertError;
 
           // Update local state
           setCart((prev) => [
@@ -175,33 +190,32 @@ const useCart = () => {
             {
               ...product,
               quantity,
-              cartItemId: data.id,
+              cartItemId: newItem.id,
             },
           ]);
         }
 
-        setToastState({
-          show: true,
-          message: `تم إضافة ${product.name_ar} إلى السلة`,
-          type: "success",
+        toast({
+          title: "تمت الإضافة",
+          description: `تم إضافة ${product.name_ar} إلى السلة`,
         });
       } catch (error) {
         console.error("Error adding to cart:", error);
-        setToastState({
-          show: true,
-          message: "فشل في إضافة المنتج إلى السلة",
-          type: "error",
+        toast({
+          title: "خطأ",
+          description: "فشل في إضافة المنتج إلى السلة",
+          variant: "destructive"
         });
       } finally {
         setLoading(false);
       }
     },
-    [user, cart]
+    [user]
   );
 
   // Remove from cart with Supabase sync
   const removeFromCart = useCallback(
-    async (productId: number) => {
+    async (productId: string) => {
       const itemToRemove = cart.find((item) => item.id === productId);
       if (!itemToRemove) return;
 
@@ -252,7 +266,7 @@ const useCart = () => {
 
   // Update quantity with Supabase sync
   const updateQuantity = useCallback(
-    async (productId: number, newQuantity: number) => {
+    async (productId: string, newQuantity: number) => {
       if (newQuantity <= 0) {
         removeFromCart(productId);
         return;

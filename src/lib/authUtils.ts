@@ -56,15 +56,22 @@ export const signUpWithEmail = async (
   const result: SignUpResult = { user: null, session: null, error: null };
 
   try {
+    // تنسيق رقم الهاتف
+    const formattedPhone = profileData.phone ? 
+      (profileData.phone.startsWith('0') ? 
+      `+2${profileData.phone}` : 
+      `+${profileData.phone}`) : undefined;
+
     // 1. إنشاء حساب المصادقة
     const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
+      phone: formattedPhone,
       options: {
         data: {
           full_name: profileData.full_name,
-          phone: profileData.phone,
           address: profileData.address,
+          role: profileData.role || 'customer'
         }
       }
     });
@@ -79,27 +86,23 @@ export const signUpWithEmail = async (
 
     // 2. إدراج بيانات إضافية في جدول profiles
     const userId = data.user.id;
-    const role = profileData.role || "user";
     
-    const { error: profileError } = await supabase.from("profiles").upsert({
+    const { error: profileError } = await supabase.from("profiles").insert({
       id: userId,
       full_name: profileData.full_name,
-      phone: profileData.phone,
+      email: email,
+      phone: formattedPhone,
       address: profileData.address,
-      role,
-      email,
-      last_updated: new Date().toISOString(),
+      role: profileData.role || 'customer',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     });
 
     if (profileError) {
-      throw new AuthError(`حدث خطأ أثناء حفظ بيانات الحساب: ${profileError.message}`, 500);
+      console.error("خطأ في إنشاء الملف الشخصي:", profileError);
+      // لا نريد إيقاف عملية التسجيل إذا فشل إنشاء الملف الشخصي
+      // لأن الـ trigger سيقوم بإنشائه
     }
-
-    // 3. إرسال بريد التحقق
-    await supabase.auth.resend({
-      type: 'signup',
-      email,
-    });
 
     result.user = data.user;
     result.session = data.session;
